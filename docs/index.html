@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IQ AI Analyzer — لوحة التوقعات</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--tx:#1b1f24;--mut:#667085;--bd:#e3e6eb;--up:#0a8f4d;--dn:#c62828;--wr:#b26a00;--ac:#2457d6}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--tx:#e8ebef;--mut:#98a2b3;--bd:#262d36;--up:#35c27a;--dn:#ef6a6a;--wr:#e0a030;--ac:#7aa2ff}}
+*{box-sizing:border-box}html,body{overflow-x:hidden}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.6 system-ui,"Segoe UI",Tahoma,sans-serif}
+header{padding:14px 16px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bd);background:var(--card)}
+h1{font-size:18px;margin:0}h2{font-size:15px;margin:0 0 8px}
+main{max-width:1000px;margin:0 auto;padding:14px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.card{min-width:0;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+.warn{border-color:var(--wr);color:var(--wr);background:transparent;font-size:13px}
+.big{font-size:30px;font-weight:700}.up{color:var(--up)}.dn{color:var(--dn)}.mut{color:var(--mut)}.wr{color:var(--wr)}
+.row{display:flex;flex-wrap:wrap;gap:10px 24px;align-items:baseline}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:6px 8px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}
+.scroll{overflow-x:auto}canvas{width:100%;height:150px;display:block}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;border:1px solid var(--bd);font-size:12px}
+input,button{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+button{cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1>IQ AI Analyzer</h1>
+  <div class="row"><span id="upd" class="mut">…</span><span id="mkt" class="pill">—</span><button id="rf">تحديث</button></div>
+</header>
+<main id="app"><div class="card">جارٍ التحميل…</div></main>
+
+<script>
+const $=s=>document.querySelector(s);
+const qs=new URLSearchParams(location.search);
+let repo=qs.get('repo')||localStorage.getItem('repo')||'';
+if(!repo&&location.hostname.endsWith('.github.io')){
+  const seg=location.pathname.split('/').filter(Boolean)[0];
+  if(seg) repo=location.hostname.split('.')[0]+'/'+seg;
+}
+const dataUrl=()=>qs.get('data')||`https://raw.githubusercontent.com/${repo}/data/public/latest.json?t=${Date.now()}`;
+const pct=x=>x==null?'—':(x*100).toFixed(1)+'%';
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const fmtT=ts=>ts?new Date(ts*1000).toLocaleString('ar-EG',{hour12:false}):'—';
+const payout=()=>+(localStorage.getItem('payout')||85)/100;
+
+function wilson(h,n,z=1.96){ if(!n) return [0,1]; const p=h/n, d=1+z*z/n;
+  const c=(p+z*z/(2*n))/d, m=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n))/d; return [c-m,c+m]; }
+
+function drawChart(cv,candles){
+  const dpr=devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  cv.width=w*dpr; cv.height=h*dpr; const g=cv.getContext('2d'); g.scale(dpr,dpr);
+  if(!candles.length) return;
+  const cl=candles.map(c=>c[4]), mn=Math.min(...cl), mx=Math.max(...cl), r=(mx-mn)||1e-9;
+  const css=getComputedStyle(document.documentElement);
+  g.strokeStyle=css.getPropertyValue('--ac'); g.lineWidth=1.6; g.beginPath();
+  cl.forEach((v,i)=>{const x=i/(cl.length-1)*(w-8)+4, y=h-6-((v-mn)/r)*(h-14); i?g.lineTo(x,y):g.moveTo(x,y)});
+  g.stroke();
+  g.fillStyle=css.getPropertyValue('--mut'); g.font='11px sans-serif';
+  g.fillText(mx.toFixed(5),4,11); g.fillText(mn.toFixed(5),4,h-2);
+}
+
+function pairCard(name,p){
+  const f=p.forecast, s=p.stats, n=s.settled||0, h=s.hits||0;
+  const [lo,hi]=wilson(h,n), be=1/(1+payout());
+  let verdict='عدد التوقعات قليل — لا يمكن الحكم بعد.', vc='mut';
+  if(n>=100){
+    if(lo>be){verdict='الحد الأدنى للثقة 95% أعلى من نقطة التعادل — إشارة إيجابية (تحتاج استمرار الاختبار).';vc='up';}
+    else if(hi<be){verdict='الحد الأعلى للثقة أقل من نقطة التعادل — النظام خاسر إحصائيًا.';vc='dn';}
+    else {verdict='نسبة الإصابة غير مميزة إحصائيًا عن التعادل/العشوائية.';vc='wr';}
+  }
+  let top='<div class="mut">لا يوجد توقع بعد (يحتاج نموذجًا مدربًا و200+ شمعة).</div>';
+  if(f&&f.ok){
+    const cls=f.direction==='صعود'?'up':'dn';
+    top=`<div class="row"><span class="big ${cls}">${f.direction==='صعود'?'▲':'▼'} ${esc(f.direction)} ${pct(f.dir_confidence)}</span>
+      <span class="pill">${esc(f.status)}</span>
+      <span class="mut">سعر مرجعي ${f.ref_price} · أفق رئيسي ${f.primary_horizon}د</span></div>
+      <div class="mut">مدة الاتجاه المقدّرة: ${f.duration&&f.duration.duration_est!=null?`${f.duration.duration_est} د (${f.duration.duration_lo}–${f.duration.duration_hi}) — ${esc(f.duration.note||'')}`:'—'}</div>
+      <div class="scroll"><table><tr><th>الأفق</th><th>احتمال صعود</th><th>احتمال هبوط</th><th>ملاحظة</th></tr>
+      ${f.multi.map(m=>`<tr><td>${m.horizon} د</td><td class="up">${pct(m.prob_up)}</td><td class="dn">${pct(m.prob_down)}</td><td class="mut">${m.approx?'تقريبي':''}</td></tr>`).join('')}</table></div>`;
+  }
+  return `<section class="card"><h2>${esc(name)} <span class="mut">· آخر شمعة ${fmtT(p.last_candle_ts)}</span></h2>
+    ${top}<canvas data-pair="${esc(name)}"></canvas>
+    <div class="row" style="margin-top:8px"><b>الأداء الفعلي:</b>
+      <span>${h}/${n} إصابة = <b>${n?(100*h/n).toFixed(1)+'%':'—'}</b></span>
+      <span class="mut">مجال ثقة 95%: ${n?(lo*100).toFixed(1)+'–'+(hi*100).toFixed(1)+'%':'—'}</span>
+      <span class="mut">نقطة التعادل (عائد <input id="po" type="number" min="50" max="100" value="${Math.round(payout()*100)}" style="width:62px">%): ${(be*100).toFixed(1)}%</span></div>
+    <div class="${vc}" style="font-size:13px">${verdict}</div></section>`;
+}
+
+function metricsTable(ms){
+  if(!ms.length) return '';
+  return `<section class="card"><h2>جودة النماذج (اختبار زمني)</h2><div class="scroll"><table>
+  <tr><th>الزوج</th><th>الأفق</th><th>النموذج</th><th>Balanced Acc</th><th>Baseline</th><th>Brier</th><th>تقييم</th><th>آخر تدريب</th></tr>
+  ${ms.map(m=>{const d=m.balanced-m.baseline, ok=d>0.02;
+  return `<tr><td>${esc(m.pair)}</td><td>${m.horizon}د</td><td>${esc(m.model)}</td><td>${pct(m.balanced)}</td><td>${pct(m.baseline)}</td><td>${(+m.brier).toFixed(3)}</td>
+  <td class="${ok?'up':'wr'}">${ok?'أفضل من الأساس':'لا ميزة واضحة'}</td><td class="mut">${esc(m.trained_at)}</td></tr>`}).join('')}</table></div></section>`;
+}
+
+function predTable(ps){
+  return `<section class="card"><h2>آخر التوقعات المسجلة</h2><div class="scroll"><table>
+  <tr><th>الوقت (UTC)</th><th>الزوج</th><th>الاتجاه</th><th>صعود%</th><th>الأفق</th><th>سعر مرجعي</th><th>الحالة</th><th>النتيجة</th></tr>
+  ${ps.slice(0,40).map(r=>`<tr><td>${esc((r.created_at||'').replace('T',' ').slice(0,16))}</td><td>${esc(r.pair)}</td>
+  <td class="${r.direction==='صعود'?'up':'dn'}">${esc(r.direction)}</td><td>${r.prob_up!=null?(r.prob_up*100).toFixed(0):'—'}</td><td>${r.target_horizon??''}</td>
+  <td>${r.ref_price}</td><td class="mut">${esc(r.status)}</td><td>${r.hit==null?'—':(r.hit?'✅':'❌')}</td></tr>`).join('')}</table></div></section>`;
+}
+
+async function load(){
+  if(!repo&&!qs.get('data')){
+    $('#app').innerHTML=`<div class="card">اكتب اسم المستودع بصيغة <code>user/repo</code>:
+      <input id="ri" placeholder="azouz/ai-trade"> <button id="rs">حفظ</button></div>`;
+    $('#rs').onclick=()=>{localStorage.setItem('repo',$('#ri').value.trim());location.reload()};return;
+  }
+  try{
+    const r=await fetch(dataUrl(),{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status+' — هل اشتغل workflow الجمع مرة على الأقل؟');
+    const d=await r.json();
+    $('#upd').textContent='آخر تحديث: '+new Date(d.generated_at).toLocaleString('ar-EG',{hour12:false});
+    const open=Object.values(d.pairs).some(p=>p.market_open_guess);
+    const m=$('#mkt'); m.textContent=open?'السوق يبدو مفتوحًا':'لا شموع حديثة (سوق مغلق؟)'; m.className='pill '+(open?'up':'wr');
+    $('#app').innerHTML=`<div class="card warn">⚠️ ${esc(d.disclaimer)} نماذج الذكاء الاصطناعي هنا لا تضمن ربحًا، والخيارات الثنائية عالية المخاطر. الأداء الظاهر تجريبي.</div>`
+      +Object.entries(d.pairs).map(([k,v])=>pairCard(k,v)).join('')+metricsTable(d.metrics)+predTable(d.predictions);
+    document.querySelectorAll('canvas[data-pair]').forEach(cv=>drawChart(cv,d.pairs[cv.dataset.pair].candles));
+    const po=$('#po'); if(po) po.onchange=()=>{localStorage.setItem('payout',po.value);load()};
+  }catch(e){ $('#app').innerHTML=`<div class="card dn">تعذر تحميل البيانات: ${esc(e.message)}</div>`; }
+}
+$('#rf').onclick=load; load(); setInterval(load,60000);
+</script>
+</body>
+</html>
