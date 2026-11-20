@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> 3d3d5e17478f650bae5b99f51ded314dffda718e
 name: collect
 on:
   schedule:
@@ -11,10 +15,20 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
+<<<<<<< HEAD
     timeout-minutes: 12
     env:
       GH_TOKEN: ${{ github.token }}
       PAIRS: ${{ vars.PAIRS || 'EURUSD' }}
+=======
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PAIRS: ${{ vars.PAIRS || 'BTCUSDT' }}
+      DATA_SOURCE: ${{ vars.DATA_SOURCE || 'auto' }}      # auto = مجاني بلا حساب | iq = يحتاج IQ_EMAIL/IQ_PASSWORD
+      LOOP_SECONDS: ${{ vars.LOOP_SECONDS || '240' }}      # يكرر الجلب داخل نفس التشغيل (توقع لكل شمعة جديدة)
+      POLL_SECONDS: "15"
+>>>>>>> 3d3d5e17478f650bae5b99f51ded314dffda718e
       IQ_EMAIL: ${{ secrets.IQ_EMAIL }}
       IQ_PASSWORD: ${{ secrets.IQ_PASSWORD }}
       SHEETS_WEBHOOK_URL: ${{ secrets.SHEETS_WEBHOOK_URL }}
@@ -26,9 +40,18 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+<<<<<<< HEAD
       - run: |
           pip install -r requirements.txt
           pip install git+https://github.com/iqoptionapi/iqoptionapi.git
       - run: scripts/state.sh pull
       - run: python worker/cycle.py collect
       - run: scripts/state.sh push
+=======
+      - run: pip install -r requirements.txt
+      - if: ${{ vars.DATA_SOURCE == 'iq' }}
+        run: pip install git+https://github.com/iqoptionapi/iqoptionapi.git
+      - run: bash scripts/state.sh pull
+      - run: python worker/cycle.py collect
+      - run: bash scripts/state.sh push
+>>>>>>> 3d3d5e17478f650bae5b99f51ded314dffda718e

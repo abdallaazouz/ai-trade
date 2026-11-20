@@ -14,7 +14,11 @@ jobs:
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
+<<<<<<< HEAD
       PAIRS: ${{ vars.PAIRS || 'EURUSD' }}
+=======
+      PAIRS: ${{ vars.PAIRS || 'BTCUSDT' }}
+>>>>>>> 3d3d5e17478f650bae5b99f51ded314dffda718e
       SHEETS_WEBHOOK_URL: ${{ secrets.SHEETS_WEBHOOK_URL }}
       SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
       DATA_DIR: ${{ github.workspace }}/state
@@ -26,7 +30,14 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt
+<<<<<<< HEAD
       - run: scripts/state.sh pull
       - run: python worker/cycle.py train
       - run: scripts/state.sh upload-models
       - run: scripts/state.sh push
+=======
+      - run: bash scripts/state.sh pull
+      - run: python worker/cycle.py train
+      - run: bash scripts/state.sh upload-models
+      - run: bash scripts/state.sh push
+>>>>>>> 3d3d5e17478f650bae5b99f51ded314dffda718e
