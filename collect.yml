@@ -1,0 +1,37 @@
+name: collect
+on:
+  schedule:
+    - cron: "*/5 * * * *"      # أقل فاصل يسمح به GitHub (قد يتأخر أحيانًا)
+  workflow_dispatch:
+concurrency:
+  group: state
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PAIRS: ${{ vars.PAIRS || 'BTCUSDT' }}
+      DATA_SOURCE: ${{ vars.DATA_SOURCE || 'auto' }}      # auto = مجاني بلا حساب | iq = يحتاج IQ_EMAIL/IQ_PASSWORD
+      LOOP_SECONDS: ${{ vars.LOOP_SECONDS || '240' }}      # يكرر الجلب داخل نفس التشغيل (توقع لكل شمعة جديدة)
+      POLL_SECONDS: "15"
+      IQ_EMAIL: ${{ secrets.IQ_EMAIL }}
+      IQ_PASSWORD: ${{ secrets.IQ_PASSWORD }}
+      SHEETS_WEBHOOK_URL: ${{ secrets.SHEETS_WEBHOOK_URL }}
+      SHEETS_TOKEN: ${{ secrets.SHEETS_TOKEN }}
+      DATA_DIR: ${{ github.workspace }}/state
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - if: ${{ vars.DATA_SOURCE == 'iq' }}
+        run: pip install git+https://github.com/iqoptionapi/iqoptionapi.git
+      - run: bash scripts/state.sh pull
+      - run: python worker/cycle.py collect
+      - run: bash scripts/state.sh push
